@@ -44,6 +44,9 @@
     .table-section h2.gidis { color: #4a9eff; }
     .table-section h2.donus { color: #ff9f43; }
 
+    .table-wrap {
+      max-height: calc(100vh - 200px); overflow-y: auto;
+    }
     table {
       width: 100%; border-collapse: collapse; font-size: 0.8rem;
     }
@@ -51,6 +54,7 @@
       text-align: left; padding: 8px 6px; font-size: 0.65rem;
       text-transform: uppercase; letter-spacing: 0.5px;
       color: #666; border-bottom: 1px solid #222; white-space: nowrap;
+      position: sticky; top: 0; background: #0a0a0a; z-index: 1;
     }
     td {
       padding: 7px 6px; border-bottom: 1px solid #1a1a1a;
@@ -128,25 +132,28 @@
   <div class="tables" id="tables" style="display:none;">
     <div class="table-section">
       <h2 class="gidis">GİDİŞ — 555 → İZBAN → 776</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>555 Kalkış</th>
-            <th>Halkapınar</th>
-            <th>İZBAN Kalkış</th>
-            <th>İZBAN Bkl</th>
-            <th>Cumaovası</th>
-            <th>776 Kalkış</th>
-            <th>776 Bkl</th>
-            <th>Toplam</th>
-          </tr>
-        </thead>
-        <tbody id="tbody-gidis"></tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>555 Kalkış</th>
+              <th>Halkapınar</th>
+              <th>İZBAN Kalkış</th>
+              <th>İZBAN Bkl</th>
+              <th>Cumaovası</th>
+              <th>776 Kalkış</th>
+              <th>776 Bkl</th>
+              <th>Toplam</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-gidis"></tbody>
+        </table>
+      </div>
     </div>
     <div class="table-section">
       <h2 class="donus">DÖNÜŞ — 776 → İZBAN → 555</h2>
-      <table>
+      <div class="table-wrap">
+        <table>
         <thead>
           <tr>
             <th>776 Kalkış</th>
@@ -160,7 +167,8 @@
           </tr>
         </thead>
         <tbody id="tbody-donus"></tbody>
-      </table>
+        </table>
+      </div>
     </div>
   </div>
 
