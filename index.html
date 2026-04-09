@@ -196,13 +196,17 @@ async function fetchWithCache(url, cacheKey) {
   let data;
   try {
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`${cacheKey}: HTTP ${res.status}`);
     data = await res.json();
   } catch (e) {
     console.warn(`Doğrudan fetch başarısız (${cacheKey}), CORS proxy deneniyor...`, e.message);
-    const res = await fetch(CORS_PROXY + encodeURIComponent(url));
-    if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
-    data = await res.json();
+    try {
+      const res = await fetch(CORS_PROXY + encodeURIComponent(url));
+      if (!res.ok) throw new Error(`${cacheKey}: Proxy HTTP ${res.status}`);
+      data = await res.json();
+    } catch (e2) {
+      throw new Error(`${cacheKey} API'sine erişilemedi`);
+    }
   }
 
   sessionStorage.setItem(cacheKey, JSON.stringify(data));
