@@ -70,6 +70,20 @@
     }
     #status.error { color: #e74c3c; }
 
+    /* Güncelle butonu */
+    .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .header-row h1 { margin-bottom: 0; }
+    #btn-update {
+      padding: 6px 14px; border: 1px solid #333; border-radius: 6px;
+      background: #1a1a1a; color: #888; font-size: 0.75rem; cursor: pointer;
+      transition: all 0.2s;
+    }
+    #btn-update:hover { border-color: #4a9eff; color: #4a9eff; }
+    #btn-update:disabled { opacity: 0.4; cursor: not-allowed; }
+    #btn-update.success { border-color: #2ecc71; color: #2ecc71; }
+    #btn-update.fail { border-color: #e74c3c; color: #e74c3c; }
+    .data-age { font-size: 0.65rem; color: #444; margin-top: 2px; text-align: right; }
+
     @media (max-width: 1000px) {
       .params { grid-template-columns: repeat(2, 1fr); }
       .tables { grid-template-columns: 1fr; }
@@ -78,7 +92,13 @@
 </head>
 <body>
 
-  <h1>555 / 776 — İZBAN Aktarma Saatleri</h1>
+  <div class="header-row">
+    <h1>555 / 776 — İZBAN Aktarma Saatleri</h1>
+    <div>
+      <button id="btn-update" onclick="refreshData()">Veriyi Güncelle</button>
+      <div class="data-age" id="data-age"></div>
+    </div>
+  </div>
 
   <div class="params">
     <div class="param-group">
@@ -184,28 +204,50 @@ function waitMinutes(departure, ready) {
 
 // ── API Katmanı ──
 
+const ESHOT_API = 'https://acikveri.bizizmir.com/api/3/action/datastore_search';
+const ESHOT_RESOURCE = 'c6fa6046-f755-47d7-b69e-db6bb06a8b5a';
 const IZBAN_BASE = 'https://openapi.izmir.bel.tr/api/izban/sefersaatleri';
 
-/**
- * ESHOT verisini lokal JSON dosyasından yükle.
- * (bizizmir.com CORS kapalı, lokal dosya kullanılıyor)
- */
-async function fetchEshot(hatNo) {
-  const cacheKey = `eshot_${hatNo}`;
-  const cached = sessionStorage.getItem(cacheKey);
-  if (cached) return JSON.parse(cached);
-
-  const res = await fetch(`eshot-${hatNo}.json`);
-  if (!res.ok) throw new Error(`eshot-${hatNo}.json yüklenemedi (HTTP ${res.status})`);
-  const data = await res.json();
-  const records = data.result.records;
-
+/** ESHOT kayıtlarını parse et */
+function parseEshotRecords(records) {
   const unique = arr => [...new Set(arr)].sort((a, b) => a - b);
-  const result = {
+  return {
     gidis: unique(records.map(r => r.GIDIS_SAATI).filter(Boolean).map(timeToMin)),
     donus: unique(records.map(r => r.DONUS_SAATI).filter(Boolean).map(timeToMin))
   };
+}
 
+/**
+ * ESHOT verisini yükle. Önce API'yi dener (CORS açıksa),
+ * başarısız olursa lokal JSON'dan okur.
+ */
+async function fetchEshot(hatNo, forceApi = false) {
+  const cacheKey = `eshot_${hatNo}`;
+  if (!forceApi) {
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) return JSON.parse(cached);
+  }
+
+  // Önce canlı API'yi dene
+  try {
+    const url = `${ESHOT_API}?resource_id=${ESHOT_RESOURCE}&filters={"HAT_NO":${hatNo}}&limit=600`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const result = parseEshotRecords(data.result.records);
+    sessionStorage.setItem(cacheKey, JSON.stringify(result));
+    sessionStorage.setItem('eshot_updated', new Date().toISOString());
+    return result;
+  } catch (e) {
+    if (forceApi) throw new Error(`ESHOT API erişilemedi: ${e.message}`);
+    console.warn(`ESHOT API erişilemedi (${hatNo}), lokal dosya kullanılıyor.`);
+  }
+
+  // Fallback: lokal JSON
+  const res = await fetch(`eshot-${hatNo}.json`);
+  if (!res.ok) throw new Error(`eshot-${hatNo}.json yüklenemedi (HTTP ${res.status})`);
+  const data = await res.json();
+  const result = parseEshotRecords(data.result.records);
   sessionStorage.setItem(cacheKey, JSON.stringify(result));
   return result;
 }
@@ -235,10 +277,10 @@ async function fetchIzban(kalkisId, varisId) {
   return seferler;
 }
 
-async function loadAllData() {
+async function loadAllData(forceApi = false) {
   const [eshot555, eshot776, izbanGidis, izbanDonus] = await Promise.all([
-    fetchEshot(555),
-    fetchEshot(776),
+    fetchEshot(555, forceApi),
+    fetchEshot(776, forceApi),
     fetchIzban(21, 32),
     fetchIzban(32, 21)
   ]);
@@ -417,6 +459,7 @@ async function init() {
     tablesEl.style.display = '';
 
     updateTables();
+    showDataAge();
 
     document.querySelectorAll('.params input').forEach(input => {
       input.addEventListener('input', updateTables);
@@ -427,6 +470,48 @@ async function init() {
     statusEl.classList.add('error');
     console.error('Init hatası:', err);
   }
+}
+
+/** Veri yaşını göster */
+function showDataAge() {
+  const el = document.getElementById('data-age');
+  const updated = sessionStorage.getItem('eshot_updated');
+  if (updated) {
+    const d = new Date(updated);
+    el.textContent = `ESHOT: ${d.toLocaleDateString('tr-TR')} ${d.toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})}`;
+  } else {
+    el.textContent = 'ESHOT: lokal dosya';
+  }
+}
+
+/** Butona tıklandığında canlı API'den güncelle */
+async function refreshData() {
+  const btn = document.getElementById('btn-update');
+  btn.disabled = true;
+  btn.textContent = 'Güncelleniyor...';
+  btn.className = '';
+
+  try {
+    // Cache temizle, API'yi zorla
+    sessionStorage.removeItem('eshot_555');
+    sessionStorage.removeItem('eshot_776');
+    sessionStorage.removeItem('izban_21_32');
+    sessionStorage.removeItem('izban_32_21');
+
+    appData = await loadAllData(true);
+    updateTables();
+    showDataAge();
+
+    btn.textContent = 'Güncellendi';
+    btn.classList.add('success');
+  } catch (err) {
+    btn.textContent = 'Başarısız — ' + err.message;
+    btn.classList.add('fail');
+    console.error('Güncelleme hatası:', err);
+  }
+
+  btn.disabled = false;
+  setTimeout(() => { btn.textContent = 'Veriyi Güncelle'; btn.className = ''; }, 4000);
 }
 
 init();
