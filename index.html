@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>555/776 – İZBAN Aktarma Saatleri</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0a0a0a; color: #e0e0e0;
+      padding: 24px; max-width: 1600px; margin: 0 auto;
+    }
+    h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 20px; color: #fff; }
+
+    /* Parametre kontrolleri */
+    .params {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+      background: #141414; border: 1px solid #222; border-radius: 8px;
+      padding: 16px; margin-bottom: 24px;
+    }
+    .param-group label {
+      display: block; font-size: 0.75rem; color: #888;
+      margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .param-group input {
+      width: 100%; padding: 8px 12px; border: 1px solid #333;
+      border-radius: 6px; background: #1a1a1a; color: #fff;
+      font-size: 1rem; text-align: center;
+    }
+    .param-group input:focus { outline: none; border-color: #4a9eff; }
+    .param-group .unit {
+      font-size: 0.7rem; color: #555; text-align: center; margin-top: 2px;
+    }
+
+    /* Tablolar */
+    .tables {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+    }
+    .table-section h2 {
+      font-size: 1rem; font-weight: 500; margin-bottom: 12px;
+      padding-bottom: 8px; border-bottom: 1px solid #222;
+    }
+    .table-section h2.gidis { color: #4a9eff; }
+    .table-section h2.donus { color: #ff9f43; }
+
+    table {
+      width: 100%; border-collapse: collapse; font-size: 0.8rem;
+    }
+    th {
+      text-align: left; padding: 8px 6px; font-size: 0.65rem;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      color: #666; border-bottom: 1px solid #222; white-space: nowrap;
+    }
+    td {
+      padding: 7px 6px; border-bottom: 1px solid #1a1a1a;
+      font-variant-numeric: tabular-nums;
+    }
+    tr.past { opacity: 0.35; }
+    tr.best td { background: rgba(46, 204, 113, 0.12); }
+    tr.best td:last-child { color: #2ecc71; font-weight: 600; }
+    tr.now td { background: rgba(74, 158, 255, 0.10); }
+    tr.now td:first-child {
+      box-shadow: inset 3px 0 0 #4a9eff;
+    }
+
+    /* Durum mesajları */
+    #status {
+      text-align: center; padding: 40px; color: #666; font-size: 0.9rem;
+    }
+    #status.error { color: #e74c3c; }
+
+    @media (max-width: 1000px) {
+      .params { grid-template-columns: repeat(2, 1fr); }
+      .tables { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>555 / 776 — İZBAN Aktarma Saatleri</h1>
+
+  <div class="params">
+    <div class="param-group">
+      <label>555 → Halkapınar</label>
+      <input type="number" id="p-555-sure" value="40" min="0" max="120">
+      <div class="unit">dakika</div>
+    </div>
+    <div class="param-group">
+      <label>Halkapınar yürüyüş</label>
+      <input type="number" id="p-halk-yuru" value="5" min="0" max="30">
+      <div class="unit">dakika</div>
+    </div>
+    <div class="param-group">
+      <label>Cumaovası yürüyüş</label>
+      <input type="number" id="p-cuma-yuru" value="5" min="0" max="30">
+      <div class="unit">dakika</div>
+    </div>
+    <div class="param-group">
+      <label>776 → Cumaovası</label>
+      <input type="number" id="p-776-sure" value="75" min="0" max="180">
+      <div class="unit">dakika</div>
+    </div>
+  </div>
+
+  <div id="status">Veriler yükleniyor...</div>
+
+  <div class="tables" id="tables" style="display:none;">
+    <div class="table-section">
+      <h2 class="gidis">GİDİŞ — 555 → İZBAN → 776</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>555 Kalkış</th>
+            <th>Halkapınar</th>
+            <th>İZBAN Kalkış</th>
+            <th>İZBAN Bkl</th>
+            <th>Cumaovası</th>
+            <th>776 Kalkış</th>
+            <th>776 Bkl</th>
+            <th>Toplam</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-gidis"></tbody>
+      </table>
+    </div>
+    <div class="table-section">
+      <h2 class="donus">DÖNÜŞ — 776 → İZBAN → 555</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>776 Kalkış</th>
+            <th>Cumaovası</th>
+            <th>İZBAN Kalkış</th>
+            <th>İZBAN Bkl</th>
+            <th>Halkapınar</th>
+            <th>555 Kalkış</th>
+            <th>555 Bkl</th>
+            <th>Toplam</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-donus"></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+// JS will be added in subsequent tasks
+</script>
+
+</body>
+</html>
