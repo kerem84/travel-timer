@@ -200,9 +200,10 @@ async function fetchEshot(hatNo) {
   const data = await res.json();
   const records = data.result.records;
 
+  const unique = arr => [...new Set(arr)].sort((a, b) => a - b);
   const result = {
-    gidis: records.map(r => r.GIDIS_SAATI).filter(Boolean).map(timeToMin).sort((a, b) => a - b),
-    donus: records.map(r => r.DONUS_SAATI).filter(Boolean).map(timeToMin).sort((a, b) => a - b)
+    gidis: unique(records.map(r => r.GIDIS_SAATI).filter(Boolean).map(timeToMin)),
+    donus: unique(records.map(r => r.DONUS_SAATI).filter(Boolean).map(timeToMin))
   };
 
   sessionStorage.setItem(cacheKey, JSON.stringify(result));
