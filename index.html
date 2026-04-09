@@ -147,10 +147,10 @@
 <script>
 // ── Zaman Yardımcıları ──
 
-/** "HH:MM" → toplam dakika (int). "06:30" → 390 */
+/** "HH:MM" veya "HH:MM:SS" → toplam dakika (int). "06:30" → 390 */
 function timeToMin(t) {
-  const [h, m] = t.split(':').map(Number);
-  return h * 60 + m;
+  const parts = t.split(':').map(Number);
+  return parts[0] * 60 + parts[1];
 }
 
 /** toplam dakika → "HH:MM". 390 → "06:30" */
@@ -184,64 +184,53 @@ function waitMinutes(departure, ready) {
 
 // ── API Katmanı ──
 
-const ESHOT_BASE = 'https://acikveri.bizizmir.com/api/3/action/datastore_search';
-const ESHOT_RESOURCE = 'c6fa6046-f755-47d7-b69e-db6bb06a8b5a';
 const IZBAN_BASE = 'https://openapi.izmir.bel.tr/api/izban/sefersaatleri';
-const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
 
-async function fetchWithCache(url, cacheKey) {
+/**
+ * ESHOT verisini lokal JSON dosyasından yükle.
+ * (bizizmir.com CORS kapalı, lokal dosya kullanılıyor)
+ */
+async function fetchEshot(hatNo) {
+  const cacheKey = `eshot_${hatNo}`;
   const cached = sessionStorage.getItem(cacheKey);
   if (cached) return JSON.parse(cached);
 
-  let data;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`${cacheKey}: HTTP ${res.status}`);
-    data = await res.json();
-  } catch (e) {
-    console.warn(`Doğrudan fetch başarısız (${cacheKey}), CORS proxy deneniyor...`, e.message);
-    try {
-      const res = await fetch(CORS_PROXY + encodeURIComponent(url));
-      if (!res.ok) throw new Error(`${cacheKey}: Proxy HTTP ${res.status}`);
-      data = await res.json();
-    } catch (e2) {
-      throw new Error(`${cacheKey} API'sine erişilemedi`);
-    }
-  }
-
-  sessionStorage.setItem(cacheKey, JSON.stringify(data));
-  return data;
-}
-
-async function fetchEshot(hatNo) {
-  const url = `${ESHOT_BASE}?resource_id=${ESHOT_RESOURCE}&filters={"HAT_NO":${hatNo}}&limit=500`;
-  const data = await fetchWithCache(url, `eshot_${hatNo}`);
+  const res = await fetch(`eshot-${hatNo}.json`);
+  if (!res.ok) throw new Error(`eshot-${hatNo}.json yüklenemedi (HTTP ${res.status})`);
+  const data = await res.json();
   const records = data.result.records;
 
-  const gidis = records
-    .map(r => r.GIDIS_SAATI)
-    .filter(Boolean)
-    .map(timeToMin)
-    .sort((a, b) => a - b);
+  const result = {
+    gidis: records.map(r => r.GIDIS_SAATI).filter(Boolean).map(timeToMin).sort((a, b) => a - b),
+    donus: records.map(r => r.DONUS_SAATI).filter(Boolean).map(timeToMin).sort((a, b) => a - b)
+  };
 
-  const donus = records
-    .map(r => r.DONUS_SAATI)
-    .filter(Boolean)
-    .map(timeToMin)
-    .sort((a, b) => a - b);
-
-  return { gidis, donus };
+  sessionStorage.setItem(cacheKey, JSON.stringify(result));
+  return result;
 }
 
+/**
+ * İZBAN sefer saatlerini API'den çek.
+ * API doğrudan dizi döner: [{HareketSaati, VarisSaati, ...}, ...]
+ * Saat formatı "HH:MM:SS"
+ */
 async function fetchIzban(kalkisId, varisId) {
-  const url = `${IZBAN_BASE}/${kalkisId}/${varisId}`;
-  const data = await fetchWithCache(url, `izban_${kalkisId}_${varisId}`);
+  const cacheKey = `izban_${kalkisId}_${varisId}`;
+  const cached = sessionStorage.getItem(cacheKey);
+  if (cached) return JSON.parse(cached);
 
-  const seferler = data.SeferSaatleri.map(s => ({
+  const res = await fetch(`${IZBAN_BASE}/${kalkisId}/${varisId}`);
+  if (!res.ok) throw new Error(`İZBAN API (${kalkisId}→${varisId}): HTTP ${res.status}`);
+  const data = await res.json();
+
+  // API doğrudan dizi döner, SeferSaatleri wrapping yok
+  const arr = Array.isArray(data) ? data : (data.SeferSaatleri || data);
+  const seferler = arr.map(s => ({
     h: timeToMin(s.HareketSaati),
     v: timeToMin(s.VarisSaati)
   })).sort((a, b) => a.h - b.h);
 
+  sessionStorage.setItem(cacheKey, JSON.stringify(seferler));
   return seferler;
 }
 
