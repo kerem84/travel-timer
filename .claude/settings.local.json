@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:acikveri.bizizmir.com)",
+      "WebFetch(domain:openapi.izmir.bel.tr)"
+    ]
+  }
+}
