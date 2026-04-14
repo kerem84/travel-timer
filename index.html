@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>555/776 – İZBAN Aktarma Saatleri</title>
+  <title>İZBAN Aktarma Saatleri</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -13,12 +13,29 @@
     }
     h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 20px; color: #fff; }
 
+    /* Güzergâh sekmeleri */
+    .route-tabs {
+      display: flex; gap: 0; margin-bottom: 24px;
+    }
+    .route-tab {
+      padding: 10px 20px; border: 1px solid #222; background: #141414;
+      color: #666; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
+      border-bottom: 2px solid transparent;
+    }
+    .route-tab:first-child { border-radius: 8px 0 0 8px; }
+    .route-tab:last-child { border-radius: 0 8px 8px 0; }
+    .route-tab.active {
+      background: #1a1a1a; color: #fff; border-bottom-color: #4a9eff;
+    }
+    .route-tab:hover:not(.active) { color: #aaa; }
+
     /* Parametre kontrolleri */
     .params {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
       background: #141414; border: 1px solid #222; border-radius: 8px;
       padding: 16px; margin-bottom: 24px;
     }
+    .params.cols-3 { grid-template-columns: repeat(3, 1fr); }
     .param-group label {
       display: block; font-size: 0.75rem; color: #888;
       margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;
@@ -45,7 +62,7 @@
     .table-section h2.donus { color: #ff9f43; }
 
     .table-wrap {
-      max-height: calc(100vh - 200px); overflow-y: auto;
+      max-height: calc(100vh - 260px); overflow-y: auto;
     }
     table {
       width: 100%; border-collapse: collapse; font-size: 0.8rem;
@@ -67,6 +84,10 @@
     tr.now td:first-child {
       box-shadow: inset 3px 0 0 #4a9eff;
     }
+
+    /* Route panel visibility */
+    .route-panel { display: none; }
+    .route-panel.active { display: block; }
 
     /* Durum mesajları */
     #status {
@@ -97,80 +118,147 @@
 <body>
 
   <div class="header-row">
-    <h1>555 / 776 — İZBAN Aktarma Saatleri</h1>
+    <h1>İZBAN Aktarma Saatleri</h1>
     <div>
       <button id="btn-update" onclick="refreshData()">Veriyi Güncelle</button>
       <div class="data-age" id="data-age"></div>
     </div>
   </div>
 
-  <div class="params">
-    <div class="param-group">
-      <label>555 → Halkapınar</label>
-      <input type="number" id="p-555-sure" value="40" min="0" max="120">
-      <div class="unit">dakika</div>
+  <div class="route-tabs">
+    <button class="route-tab active" onclick="switchRoute('r1')">555 → İZBAN → 776</button>
+    <button class="route-tab" onclick="switchRoute('r2')">Alaybey İZBAN → 776</button>
+  </div>
+
+  <!-- Güzergâh 1: 555 → Halkapınar İZBAN → Cumaovası → 776 -->
+  <div class="route-panel active" id="panel-r1">
+    <div class="params">
+      <div class="param-group">
+        <label>555 → Halkapınar</label>
+        <input type="number" id="p-555-sure" value="40" min="0" max="120">
+        <div class="unit">dakika</div>
+      </div>
+      <div class="param-group">
+        <label>Halkapınar yürüyüş</label>
+        <input type="number" id="p-halk-yuru" value="5" min="0" max="30">
+        <div class="unit">dakika</div>
+      </div>
+      <div class="param-group">
+        <label>Cumaovası yürüyüş</label>
+        <input type="number" id="p-cuma-yuru" value="5" min="0" max="30">
+        <div class="unit">dakika</div>
+      </div>
+      <div class="param-group">
+        <label>776 → Cumaovası</label>
+        <input type="number" id="p-776-sure" value="75" min="0" max="180">
+        <div class="unit">dakika</div>
+      </div>
     </div>
-    <div class="param-group">
-      <label>Halkapınar yürüyüş</label>
-      <input type="number" id="p-halk-yuru" value="5" min="0" max="30">
-      <div class="unit">dakika</div>
+
+    <div class="tables" id="tables-r1" style="display:none;">
+      <div class="table-section">
+        <h2 class="gidis">GİDİŞ — 555 → İZBAN → 776</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>555 Kalkış</th>
+                <th>Halkapınar</th>
+                <th>İZBAN Kalkış</th>
+                <th>İZBAN Bkl</th>
+                <th>Cumaovası</th>
+                <th>776 Kalkış</th>
+                <th>776 Bkl</th>
+                <th>Toplam</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-r1-gidis"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="table-section">
+        <h2 class="donus">DÖNÜŞ — 776 → İZBAN → 555</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>776 Kalkış</th>
+                <th>Cumaovası</th>
+                <th>İZBAN Kalkış</th>
+                <th>İZBAN Bkl</th>
+                <th>Halkapınar</th>
+                <th>555 Kalkış</th>
+                <th>555 Bkl</th>
+                <th>Toplam</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-r1-donus"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
-    <div class="param-group">
-      <label>Cumaovası yürüyüş</label>
-      <input type="number" id="p-cuma-yuru" value="5" min="0" max="30">
-      <div class="unit">dakika</div>
+  </div>
+
+  <!-- Güzergâh 2: Alaybey İZBAN → Cumaovası → 776 -->
+  <div class="route-panel" id="panel-r2">
+    <div class="params cols-3">
+      <div class="param-group">
+        <label>Alaybey yürüyüş</label>
+        <input type="number" id="p-alay-yuru" value="5" min="0" max="30">
+        <div class="unit">dakika</div>
+      </div>
+      <div class="param-group">
+        <label>Cumaovası yürüyüş</label>
+        <input type="number" id="p-cuma-yuru-r2" value="5" min="0" max="30">
+        <div class="unit">dakika</div>
+      </div>
+      <div class="param-group">
+        <label>776 → Cumaovası</label>
+        <input type="number" id="p-776-sure-r2" value="75" min="0" max="180">
+        <div class="unit">dakika</div>
+      </div>
     </div>
-    <div class="param-group">
-      <label>776 → Cumaovası</label>
-      <input type="number" id="p-776-sure" value="75" min="0" max="180">
-      <div class="unit">dakika</div>
+
+    <div class="tables" id="tables-r2" style="display:none;">
+      <div class="table-section">
+        <h2 class="gidis">GİDİŞ — Alaybey İZBAN → 776</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>İZBAN Kalkış</th>
+                <th>Cumaovası</th>
+                <th>776 Kalkış</th>
+                <th>776 Bkl</th>
+                <th>Toplam</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-r2-gidis"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="table-section">
+        <h2 class="donus">DÖNÜŞ — 776 → İZBAN Alaybey</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>776 Kalkış</th>
+                <th>Cumaovası</th>
+                <th>İZBAN Kalkış</th>
+                <th>İZBAN Bkl</th>
+                <th>Alaybey</th>
+                <th>Toplam</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-r2-donus"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 
   <div id="status">Veriler yükleniyor...</div>
-
-  <div class="tables" id="tables" style="display:none;">
-    <div class="table-section">
-      <h2 class="gidis">GİDİŞ — 555 → İZBAN → 776</h2>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>555 Kalkış</th>
-              <th>Halkapınar</th>
-              <th>İZBAN Kalkış</th>
-              <th>İZBAN Bkl</th>
-              <th>Cumaovası</th>
-              <th>776 Kalkış</th>
-              <th>776 Bkl</th>
-              <th>Toplam</th>
-            </tr>
-          </thead>
-          <tbody id="tbody-gidis"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="table-section">
-      <h2 class="donus">DÖNÜŞ — 776 → İZBAN → 555</h2>
-      <div class="table-wrap">
-        <table>
-        <thead>
-          <tr>
-            <th>776 Kalkış</th>
-            <th>Cumaovası</th>
-            <th>İZBAN Kalkış</th>
-            <th>İZBAN Bkl</th>
-            <th>Halkapınar</th>
-            <th>555 Kalkış</th>
-            <th>555 Bkl</th>
-            <th>Toplam</th>
-          </tr>
-        </thead>
-        <tbody id="tbody-donus"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
 
 <script>
 // ── Zaman Yardımcıları ──
@@ -215,6 +303,14 @@ function waitMinutes(departure, ready) {
 const ESHOT_API = 'https://acikveri.bizizmir.com/api/3/action/datastore_search';
 const ESHOT_RESOURCE = 'c6fa6046-f755-47d7-b69e-db6bb06a8b5a';
 const IZBAN_BASE = 'https://openapi.izmir.bel.tr/api/izban/sefersaatleri';
+const FETCH_TIMEOUT_MS = 10000;
+
+/** Timeout sarmalayıcı: süre aşılırsa AbortError fırlatır */
+function fetchWithTimeout(url, ms = FETCH_TIMEOUT_MS) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
 
 /** ESHOT kayıtlarını parse et */
 function parseEshotRecords(records) {
@@ -239,7 +335,7 @@ async function fetchEshot(hatNo, forceApi = false) {
   // Önce canlı API'yi dene
   try {
     const url = `${ESHOT_API}?resource_id=${ESHOT_RESOURCE}&filters={"HAT_NO":${hatNo}}&limit=600`;
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const result = parseEshotRecords(data.result.records);
@@ -247,7 +343,6 @@ async function fetchEshot(hatNo, forceApi = false) {
     sessionStorage.setItem('eshot_updated', new Date().toISOString());
     return result;
   } catch (e) {
-    if (forceApi) throw new Error(`ESHOT API erişilemedi: ${e.message}`);
     console.warn(`ESHOT API erişilemedi (${hatNo}), lokal dosya kullanılıyor.`);
   }
 
@@ -270,7 +365,7 @@ async function fetchIzban(kalkisId, varisId) {
   const cached = sessionStorage.getItem(cacheKey);
   if (cached) return JSON.parse(cached);
 
-  const res = await fetch(`${IZBAN_BASE}/${kalkisId}/${varisId}`);
+  const res = await fetchWithTimeout(`${IZBAN_BASE}/${kalkisId}/${varisId}`);
   if (!res.ok) throw new Error(`İZBAN API (${kalkisId}→${varisId}): HTTP ${res.status}`);
   const data = await res.json();
 
@@ -286,18 +381,20 @@ async function fetchIzban(kalkisId, varisId) {
 }
 
 async function loadAllData(forceApi = false) {
-  const [eshot555, eshot776, izbanGidis, izbanDonus] = await Promise.all([
+  const [eshot555, eshot776, izbanHalkCuma, izbanCumaHalk, izbanAlayCuma, izbanCumaAlay] = await Promise.all([
     fetchEshot(555, forceApi),
     fetchEshot(776, forceApi),
     fetchIzban(21, 32),
-    fetchIzban(32, 21)
+    fetchIzban(32, 21),
+    fetchIzban(16, 32),
+    fetchIzban(32, 16)
   ]);
-  return { eshot555, eshot776, izbanGidis, izbanDonus };
+  return { eshot555, eshot776, izbanHalkCuma, izbanCumaHalk, izbanAlayCuma, izbanCumaAlay };
 }
 
-// ── Hesaplama ──
+// ── Hesaplama: Güzergâh 1 (555 → İZBAN → 776) ──
 
-function getParams() {
+function getParamsR1() {
   return {
     sure555:    parseInt(document.getElementById('p-555-sure').value) || 0,
     halkYuru:   parseInt(document.getElementById('p-halk-yuru').value) || 0,
@@ -306,11 +403,11 @@ function getParams() {
   };
 }
 
-function calculateGidis(data, params) {
+function calculateR1Gidis(data, params) {
   const rows = [];
   const { gidis: bus555 } = data.eshot555;
   const { gidis: bus776 } = data.eshot776;
-  const izbanSeferler = data.izbanGidis;
+  const izbanSeferler = data.izbanHalkCuma;
   const izbanHareket = izbanSeferler.map(s => s.h);
 
   for (const kalkis555 of bus555) {
@@ -352,11 +449,11 @@ function calculateGidis(data, params) {
   return rows;
 }
 
-function calculateDonus(data, params) {
+function calculateR1Donus(data, params) {
   const rows = [];
   const { gidis: bus776 } = data.eshot776;
   const { donus: bus555 } = data.eshot555;
-  const izbanSeferler = data.izbanDonus;
+  const izbanSeferler = data.izbanCumaHalk;
   const izbanHareket = izbanSeferler.map(s => s.h);
 
   for (const kalkis776 of bus776) {
@@ -398,15 +495,92 @@ function calculateDonus(data, params) {
   return rows;
 }
 
+// ── Hesaplama: Güzergâh 2 (Alaybey İZBAN → 776) ──
+
+function getParamsR2() {
+  return {
+    alayYuru:   parseInt(document.getElementById('p-alay-yuru').value) || 0,
+    cumaYuru:   parseInt(document.getElementById('p-cuma-yuru-r2').value) || 0,
+    sure776:    parseInt(document.getElementById('p-776-sure-r2').value) || 0,
+  };
+}
+
+function calculateR2Gidis(data, params) {
+  const rows = [];
+  const { gidis: bus776 } = data.eshot776;
+  const izbanSeferler = data.izbanAlayCuma;
+
+  for (const sefer of izbanSeferler) {
+    const cumaVaris = sefer.v;
+    const otobusHazir = cumaVaris + params.cumaYuru;
+
+    const busIdx = findFirstAfter(bus776, otobusHazir);
+    if (busIdx === -1) continue;
+
+    const bus776Kalkis = bus776[busIdx];
+    const busBekleme = waitMinutes(bus776Kalkis, otobusHazir);
+
+    rows.push({
+      cols: [
+        minToTime(sefer.h),
+        minToTime(cumaVaris),
+        minToTime(bus776Kalkis),
+        `${busBekleme} dk`,
+        `${busBekleme} dk`
+      ],
+      toplamBekleme: busBekleme,
+      busKalkisMin: sefer.h - params.alayYuru
+    });
+  }
+
+  return rows;
+}
+
+function calculateR2Donus(data, params) {
+  const rows = [];
+  const { gidis: bus776 } = data.eshot776;
+  const izbanSeferler = data.izbanCumaAlay;
+  const izbanHareket = izbanSeferler.map(s => s.h);
+
+  for (const kalkis776 of bus776) {
+    const cumaVaris = kalkis776 + params.sure776;
+    const izbanHazir = cumaVaris + params.cumaYuru;
+
+    const izbanIdx = findFirstAfter(izbanHareket, izbanHazir);
+    if (izbanIdx === -1) continue;
+
+    const izbanSefer = izbanSeferler[izbanIdx];
+    const izbanBekleme = waitMinutes(izbanSefer.h, izbanHazir);
+    const alayVaris = izbanSefer.v;
+
+    rows.push({
+      cols: [
+        minToTime(kalkis776),
+        minToTime(cumaVaris),
+        minToTime(izbanSefer.h),
+        `${izbanBekleme} dk`,
+        minToTime(alayVaris),
+        `${izbanBekleme} dk`
+      ],
+      toplamBekleme: izbanBekleme,
+      busKalkisMin: kalkis776
+    });
+  }
+
+  return rows;
+}
+
 // ── Render ──
 
 function renderTable(tbodyId, rows) {
   const tbody = document.getElementById(tbodyId);
   tbody.innerHTML = '';
 
+  const colCount = rows.length > 0 ? rows[0].cols.length : 8;
+
   if (rows.length === 0) {
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td colspan="8" style="text-align:center;color:#666;padding:20px;">Uygun aktarma bulunamadı</td>';
+    tr.innerHTML = `<td colspan="${colCount}" style="text-align:center;color:#666;padding:20px;">Uygun aktarma bulunamadı</td>`;
     tbody.appendChild(tr);
     return;
   }
@@ -443,28 +617,46 @@ function renderTable(tbodyId, rows) {
   }
 }
 
+// ── Güzergâh Seçimi ──
+
+let activeRoute = 'r1';
+
+function switchRoute(route) {
+  activeRoute = route;
+  document.querySelectorAll('.route-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.route-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.route-tab[onclick="switchRoute('${route}')"]`).classList.add('active');
+  document.getElementById(`panel-${route}`).classList.add('active');
+  updateTables();
+}
+
 // ── Uygulama ──
 
 let appData = null;
 
 function updateTables() {
   if (!appData) return;
-  const params = getParams();
-  const gidisRows = calculateGidis(appData, params);
-  const donusRows = calculateDonus(appData, params);
-  renderTable('tbody-gidis', gidisRows);
-  renderTable('tbody-donus', donusRows);
+
+  if (activeRoute === 'r1') {
+    const params = getParamsR1();
+    renderTable('tbody-r1-gidis', calculateR1Gidis(appData, params));
+    renderTable('tbody-r1-donus', calculateR1Donus(appData, params));
+  } else {
+    const params = getParamsR2();
+    renderTable('tbody-r2-gidis', calculateR2Gidis(appData, params));
+    renderTable('tbody-r2-donus', calculateR2Donus(appData, params));
+  }
 }
 
 async function init() {
   const statusEl = document.getElementById('status');
-  const tablesEl = document.getElementById('tables');
 
   try {
     appData = await loadAllData();
 
     statusEl.style.display = 'none';
-    tablesEl.style.display = '';
+    document.getElementById('tables-r1').style.display = '';
+    document.getElementById('tables-r2').style.display = '';
 
     updateTables();
     showDataAge();
@@ -500,11 +692,9 @@ async function refreshData() {
   btn.className = '';
 
   try {
-    // Cache temizle, API'yi zorla
+    // Sadece ESHOT cache'ini temizle, İZBAN cache'e dokunma
     sessionStorage.removeItem('eshot_555');
     sessionStorage.removeItem('eshot_776');
-    sessionStorage.removeItem('izban_21_32');
-    sessionStorage.removeItem('izban_32_21');
 
     appData = await loadAllData(true);
     updateTables();

@@ -4,9 +4,8 @@
     {
       "name": "izban",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["serve", "."],
-      "port": 3000,
-      "autoPort": true
+      "runtimeArgs": ["serve", ".", "-l", "3737"],
+      "port": 3737
     }
   ]
 }

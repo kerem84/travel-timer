@@ -1,0 +1,6 @@
+opencode.json
+*.pdf
+start.cmd
+start.ps1
+docs/
+node_modules/
