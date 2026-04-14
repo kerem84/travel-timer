@@ -4,3 +4,4 @@ start.cmd
 start.ps1
 docs/
 node_modules/
+.claude/
