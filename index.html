@@ -271,31 +271,49 @@ function timeToMin(t) {
 
 /** toplam dakika → "HH:MM". 390 → "06:30" */
 function minToTime(m) {
-  const wrapped = ((m % 1440) + 1440) % 1440;
+  const wrapped = minuteOfDay(m);
   const hh = String(Math.floor(wrapped / 60)).padStart(2, '0');
   const mm = String(wrapped % 60).padStart(2, '0');
   return `${hh}:${mm}`;
 }
 
+/** Dakikayı gün içi 0..1439 aralığına indirger. */
+function minuteOfDay(m) {
+  return ((m % 1440) + 1440) % 1440;
+}
+
+/** Verilen gün içi saatin, threshold sonrasındaki ilk mutlak dakika karşılığı. */
+function nextOccurrence(minute, threshold) {
+  const normalized = minuteOfDay(minute);
+  const dayOffset = Math.floor(threshold / 1440) * 1440;
+  let candidate = normalized + dayOffset;
+  if (candidate < threshold) candidate += 1440;
+  return candidate;
+}
+
 /**
  * Sıralı dakika dizisinde verilen eşikten büyük veya eşit ilk elemanın index'ini döndürür.
- * Gece yarısı geçişi: threshold >= 1440 ise ve val < 720 ise val'e +1440 ekler.
+ * Gece yarısı geçişlerinde ertesi günün ilk seferini de dikkate alır.
  * Bulunamazsa -1 döner.
  */
 function findFirstAfter(minutes, threshold) {
+  let bestIdx = -1;
+  let bestValue = Infinity;
+
   for (let i = 0; i < minutes.length; i++) {
-    let val = minutes[i];
-    if (threshold >= 1440 && val < 720) val += 1440;
-    if (val >= threshold) return i;
+    const val = nextOccurrence(minutes[i], threshold);
+    if (val < bestValue) {
+      bestValue = val;
+      bestIdx = i;
+    }
   }
-  return -1;
+
+  return bestIdx;
 }
 
 /** Bekleme süresini hesapla. Gece yarısı geçişini handle eder. */
 function waitMinutes(departure, ready) {
-  let diff = departure - ready;
-  if (diff < 0) diff += 1440;
-  return diff;
+  return nextOccurrence(departure, ready) - ready;
 }
 
 // ── API Katmanı ──
@@ -321,9 +339,29 @@ function parseEshotRecords(records) {
   };
 }
 
+const ESHOT_FALLBACK = {
+  "555": {
+    gidis: [10,20,360,375,382,390,402,404,414,426,438,448,450,451,463,470,476,489,490,492,502,509,514,515,528,536,547,558,566,580,585,602,604,616,623,630,642,644,658,661,672,680,686,699,700,714,718,728,734,737,742,750,756,766,770,775,782,784,794,798,812,813,814,826,830,840,846,854,862,868,878,882,894,896,910,924,927,938,945,952,965,966,980,985,994,1001,1008,1016,1022,1031,1036,1046,1050,1061,1064,1076,1078,1091,1092,1106,1120,1121,1134,1136,1148,1151,1162,1166,1176,1181,1190,1197,1205,1215,1227,1233,1249,1251,1269,1271,1287,1293,1305,1315,1330,1337,1359,1360,1381,1390,1403,1420,1425],
+    donus: [0,20,25,50,396,403,405,416,418,429,440,442,455,462,468,479,481,484,490,492,504,506,507,518,519,528,533,550,553,572,591,594,610,616,629,638,648,656,667,670,684,686,698,705,712,724,726,740,743,754,762,768,779,781,782,795,796,800,810,811,819,824,827,838,843,852,857,859,866,875,880,891,894,907,908,922,923,936,939,950,955,964,975,978,990,992,1005,1006,1020,1034,1035,1048,1050,1062,1065,1076,1080,1090,1095,1104,1110,1118,1125,1132,1140,1146,1155,1160,1170,1174,1185,1188,1200,1202,1215,1216,1230,1241,1245,1260,1263,1275,1285,1291,1307,1309,1310,1329,1330,1350,1351,1370,1373,1395,1400,1417,1430]
+  },
+  "776": {
+    gidis: [360,385,410,435,465,490,525,565,600,635,670,705,745,780,815,850,885,915,940,960,995,1030,1065,1095,1140,1185,1210,1215,1245,1250,1290,1330,1390],
+    donus: [395,435,440,470,495,520,545,580,615,655,690,725,760,765,795,830,870,905,940,975,1007,1030,1060,1095,1130,1140,1165,1170,1200,1230,1275,1320,1350,1353,1380,1410]
+  }
+};
+
+function cloneEshotFallback(hatNo) {
+  const fallback = ESHOT_FALLBACK[hatNo];
+  if (!fallback) throw new Error(`${hatNo} için gömülü ESHOT yedeği bulunamadı`);
+  return {
+    gidis: [...fallback.gidis],
+    donus: [...fallback.donus]
+  };
+}
+
 /**
  * ESHOT verisini yükle. Önce API'yi dener (CORS açıksa),
- * başarısız olursa lokal JSON'dan okur.
+ * başarısız olursa lokal JSON'dan, o da olmazsa gömülü yedekten okur.
  */
 async function fetchEshot(hatNo, forceApi = false) {
   const cacheKey = `eshot_${hatNo}`;
@@ -347,10 +385,18 @@ async function fetchEshot(hatNo, forceApi = false) {
   }
 
   // Fallback: lokal JSON
-  const res = await fetch(`eshot-${hatNo}.json`);
-  if (!res.ok) throw new Error(`eshot-${hatNo}.json yüklenemedi (HTTP ${res.status})`);
-  const data = await res.json();
-  const result = parseEshotRecords(data.result.records);
+  try {
+    const res = await fetch(`eshot-${hatNo}.json`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const result = parseEshotRecords(data.result.records);
+    sessionStorage.setItem(cacheKey, JSON.stringify(result));
+    return result;
+  } catch (e) {
+    console.warn(`Lokal ESHOT dosyası okunamadı (${hatNo}), gömülü yedek kullanılıyor.`);
+  }
+
+  const result = cloneEshotFallback(hatNo);
   sessionStorage.setItem(cacheKey, JSON.stringify(result));
   return result;
 }
@@ -365,19 +411,24 @@ async function fetchIzban(kalkisId, varisId) {
   const cached = sessionStorage.getItem(cacheKey);
   if (cached) return JSON.parse(cached);
 
-  const res = await fetchWithTimeout(`${IZBAN_BASE}/${kalkisId}/${varisId}`);
-  if (!res.ok) throw new Error(`İZBAN API (${kalkisId}→${varisId}): HTTP ${res.status}`);
-  const data = await res.json();
+  try {
+    const res = await fetchWithTimeout(`${IZBAN_BASE}/${kalkisId}/${varisId}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
 
-  // API doğrudan dizi döner, SeferSaatleri wrapping yok
-  const arr = Array.isArray(data) ? data : (data.SeferSaatleri || data);
-  const seferler = arr.map(s => ({
-    h: timeToMin(s.HareketSaati),
-    v: timeToMin(s.VarisSaati)
-  })).sort((a, b) => a.h - b.h);
+    // API doğrudan dizi döner, SeferSaatleri wrapping yok
+    const arr = Array.isArray(data) ? data : (data.SeferSaatleri || data);
+    const seferler = arr.map(s => ({
+      h: timeToMin(s.HareketSaati),
+      v: timeToMin(s.VarisSaati)
+    })).sort((a, b) => a.h - b.h);
 
-  sessionStorage.setItem(cacheKey, JSON.stringify(seferler));
-  return seferler;
+    sessionStorage.setItem(cacheKey, JSON.stringify(seferler));
+    return seferler;
+  } catch (e) {
+    console.warn(`İZBAN API erişilemedi (${kalkisId}→${varisId}), boş sefer listesi kullanılıyor.`);
+    return [];
+  }
 }
 
 async function loadAllData(forceApi = false) {
@@ -418,23 +469,24 @@ function calculateR1Gidis(data, params) {
     if (izbanIdx === -1) continue;
 
     const izbanSefer = izbanSeferler[izbanIdx];
-    const izbanBekleme = waitMinutes(izbanSefer.h, izbanHazir);
-    const cumaVaris = izbanSefer.v;
+    const izbanKalkis = nextOccurrence(izbanSefer.h, izbanHazir);
+    const izbanBekleme = izbanKalkis - izbanHazir;
+    const cumaVaris = nextOccurrence(izbanSefer.v, izbanKalkis);
 
     const otobusHazir = cumaVaris + params.cumaYuru;
 
     const busIdx = findFirstAfter(bus776, otobusHazir);
     if (busIdx === -1) continue;
 
-    const bus776Kalkis = bus776[busIdx];
-    const busBekleme = waitMinutes(bus776Kalkis, otobusHazir);
+    const bus776Kalkis = nextOccurrence(bus776[busIdx], otobusHazir);
+    const busBekleme = bus776Kalkis - otobusHazir;
     const toplamBekleme = izbanBekleme + busBekleme;
 
     rows.push({
       cols: [
         minToTime(kalkis555),
         minToTime(halkVaris),
-        minToTime(izbanSefer.h),
+        minToTime(izbanKalkis),
         `${izbanBekleme} dk`,
         minToTime(cumaVaris),
         minToTime(bus776Kalkis),
@@ -451,7 +503,7 @@ function calculateR1Gidis(data, params) {
 
 function calculateR1Donus(data, params) {
   const rows = [];
-  const { gidis: bus776 } = data.eshot776;
+  const { donus: bus776 } = data.eshot776;
   const { donus: bus555 } = data.eshot555;
   const izbanSeferler = data.izbanCumaHalk;
   const izbanHareket = izbanSeferler.map(s => s.h);
@@ -464,23 +516,24 @@ function calculateR1Donus(data, params) {
     if (izbanIdx === -1) continue;
 
     const izbanSefer = izbanSeferler[izbanIdx];
-    const izbanBekleme = waitMinutes(izbanSefer.h, izbanHazir);
-    const halkVaris = izbanSefer.v;
+    const izbanKalkis = nextOccurrence(izbanSefer.h, izbanHazir);
+    const izbanBekleme = izbanKalkis - izbanHazir;
+    const halkVaris = nextOccurrence(izbanSefer.v, izbanKalkis);
 
     const otobusHazir = halkVaris + params.halkYuru;
 
     const busIdx = findFirstAfter(bus555, otobusHazir);
     if (busIdx === -1) continue;
 
-    const bus555Kalkis = bus555[busIdx];
-    const busBekleme = waitMinutes(bus555Kalkis, otobusHazir);
+    const bus555Kalkis = nextOccurrence(bus555[busIdx], otobusHazir);
+    const busBekleme = bus555Kalkis - otobusHazir;
     const toplamBekleme = izbanBekleme + busBekleme;
 
     rows.push({
       cols: [
         minToTime(kalkis776),
         minToTime(cumaVaris),
-        minToTime(izbanSefer.h),
+        minToTime(izbanKalkis),
         `${izbanBekleme} dk`,
         minToTime(halkVaris),
         minToTime(bus555Kalkis),
@@ -511,25 +564,26 @@ function calculateR2Gidis(data, params) {
   const izbanSeferler = data.izbanAlayCuma;
 
   for (const sefer of izbanSeferler) {
-    const cumaVaris = sefer.v;
+    const izbanKalkis = sefer.h;
+    const cumaVaris = nextOccurrence(sefer.v, izbanKalkis);
     const otobusHazir = cumaVaris + params.cumaYuru;
 
     const busIdx = findFirstAfter(bus776, otobusHazir);
     if (busIdx === -1) continue;
 
-    const bus776Kalkis = bus776[busIdx];
-    const busBekleme = waitMinutes(bus776Kalkis, otobusHazir);
+    const bus776Kalkis = nextOccurrence(bus776[busIdx], otobusHazir);
+    const busBekleme = bus776Kalkis - otobusHazir;
 
     rows.push({
       cols: [
-        minToTime(sefer.h),
+        minToTime(izbanKalkis),
         minToTime(cumaVaris),
         minToTime(bus776Kalkis),
         `${busBekleme} dk`,
         `${busBekleme} dk`
       ],
       toplamBekleme: busBekleme,
-      busKalkisMin: sefer.h - params.alayYuru
+      busKalkisMin: izbanKalkis - params.alayYuru
     });
   }
 
@@ -538,7 +592,7 @@ function calculateR2Gidis(data, params) {
 
 function calculateR2Donus(data, params) {
   const rows = [];
-  const { gidis: bus776 } = data.eshot776;
+  const { donus: bus776 } = data.eshot776;
   const izbanSeferler = data.izbanCumaAlay;
   const izbanHareket = izbanSeferler.map(s => s.h);
 
@@ -550,14 +604,15 @@ function calculateR2Donus(data, params) {
     if (izbanIdx === -1) continue;
 
     const izbanSefer = izbanSeferler[izbanIdx];
-    const izbanBekleme = waitMinutes(izbanSefer.h, izbanHazir);
-    const alayVaris = izbanSefer.v;
+    const izbanKalkis = nextOccurrence(izbanSefer.h, izbanHazir);
+    const izbanBekleme = izbanKalkis - izbanHazir;
+    const alayVaris = nextOccurrence(izbanSefer.v, izbanKalkis);
 
     rows.push({
       cols: [
         minToTime(kalkis776),
         minToTime(cumaVaris),
-        minToTime(izbanSefer.h),
+        minToTime(izbanKalkis),
         `${izbanBekleme} dk`,
         minToTime(alayVaris),
         `${izbanBekleme} dk`
@@ -593,8 +648,9 @@ function renderTable(tbodyId, rows) {
   let closestIdx = -1;
   let closestDiff = Infinity;
   rows.forEach((r, i) => {
-    const diff = r.busKalkisMin - nowMin;
-    if (diff >= 0 && diff < closestDiff) {
+    const rowStart = minuteOfDay(r.busKalkisMin);
+    const diff = nextOccurrence(rowStart, nowMin) - nowMin;
+    if (diff < closestDiff) {
       closestDiff = diff;
       closestIdx = i;
     }
@@ -602,8 +658,9 @@ function renderTable(tbodyId, rows) {
 
   rows.forEach((row, i) => {
     const tr = document.createElement('tr');
+    const rowStart = minuteOfDay(row.busKalkisMin);
 
-    if (row.busKalkisMin < nowMin) tr.classList.add('past');
+    if (i !== closestIdx && rowStart < nowMin) tr.classList.add('past');
     if (row.toplamBekleme === minBekleme) tr.classList.add('best');
     if (i === closestIdx) tr.classList.add('now');
 
